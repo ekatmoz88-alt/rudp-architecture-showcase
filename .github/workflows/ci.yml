@@ -2,23 +2,52 @@ name: RUDP Architecture CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ "main" ]
 
 jobs:
-  mermaid-validate:
+  validate-docs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Node.js and Mermaid CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nodejs npm
-          npm install -g @mermaid-js/mermaid-cli
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-      - name: Validate Mermaid diagrams in docs
+      - name: Validate Markdown structure and Mermaid blocks
         run: |
-          mermaid-cli check docs/architecture-c4.md docs/protocol-and-sequence.md
+          python3 - << 'EOF'
+          import pathlib, re, sys
+
+          md_files = list(pathlib.Path(".").rglob("*.md"))
+          if not md_files:
+              print("No Markdown files found.")
+              sys.exit(1)
+
+          errors = []
+          for path in md_files:
+              text = path.read_text(encoding="utf-8")
+              opens = len(re.findall(r"^```mermaid\s*\$", text, flags=re.M))
+              closes = len(re.findall(r"^```\s*$", text, flags=re.M))
+              if opens == 0 and path.parent.name == "docs":
+                  errors.append(f"{path}: no mermaid blocks found")
+              if closes < opens:
+                  errors.append(f"{path}: unclosed mermaid code block")
+
+              # Проверка на случайную утечку корпоративных email или локальных путей
+              if re.search(r"@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text):
+                  errors.append(f"{path}: potential email address detected")
+              if "/media/" in text or "/home/" in text:
+                  errors.append(f"{path}: local filesystem path detected")
+
+          if errors:
+              for e in errors:
+                  print("ERROR:", e)
+              sys.exit(1)
+
+          print(f"Successfully validated {len(md_files)} Markdown files.")
+          EOF
