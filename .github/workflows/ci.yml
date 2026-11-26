@@ -38,7 +38,6 @@ jobs:
               if closes < opens:
                   errors.append(f"{path}: unclosed mermaid code block")
 
-              # Проверка на случайную утечку корпоративных email или локальных путей
               if re.search(r"@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text):
                   errors.append(f"{path}: potential email address detected")
               if "/media/" in text or "/home/" in text:
