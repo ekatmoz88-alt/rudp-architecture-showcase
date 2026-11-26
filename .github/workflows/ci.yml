@@ -20,7 +20,7 @@ jobs:
 
       - name: Validate Markdown structure and Mermaid blocks
         run: |
-          python3 - << 'EOF'
+          python3 - << 'PYEOF'
           import pathlib, re, sys
 
           md_files = list(pathlib.Path(".").rglob("*.md"))
@@ -31,7 +31,7 @@ jobs:
           errors = []
           for path in md_files:
               text = path.read_text(encoding="utf-8")
-              opens = len(re.findall(r"^```mermaid\s*\$", text, flags=re.M))
+              opens = len(re.findall(r"^```mermaid\s*$", text, flags=re.M))
               closes = len(re.findall(r"^```\s*$", text, flags=re.M))
               if opens == 0 and path.parent.name == "docs":
                   errors.append(f"{path}: no mermaid blocks found")
@@ -49,4 +49,4 @@ jobs:
               sys.exit(1)
 
           print(f"Successfully validated {len(md_files)} Markdown files.")
-          EOF
+          PYEOF

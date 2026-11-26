@@ -1,58 +1,106 @@
-cd /media/kate/249e06f1-5bec-4fc0-af51-37aace7b929a/aabramov/Documents/rudp-architecture-showcase && \
-cat << 'EOF' > .github/workflows/ci.yml
-name: RUDP Architecture CI
+# C4 Architecture Diagrams – RUDP Emulator
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+## 1. Context Diagram (Level 0)
 
-jobs:
-  validate-docs:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+```mermaid
+flowchart LR
+    C1["Client Tool / Test Harness"]
+    C2["Remote Peer / Server"]
+    Sys["RUDP Emulator<br/>(C++17 CLI & Library)"]
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    C1 -->|"CLI commands / UDP packets"| Sys
+    Sys -->|"Responses / Telemetry"| C1
+    C2 <-->|"RUDP session, data, ACK/NACK"| Sys
+```
 
-      - name: Validate Markdown structure and Mermaid blocks
-        run: |
-          python3 - << 'PYEOF'
-          import pathlib, re, sys
+**Description:** The emulator sits as a stand-alone binary that communicates with external entities (client tools, test harnesses, or other systems) via a command-socket and/or UDP packets. It can act as both client and server depending on the invoked mode.
 
-          md_files = list(pathlib.Path(".").rglob("*.md"))
-          if not md_files:
-              print("No Markdown files found.")
-              sys.exit(1)
+---
 
-          errors = []
-          for path in md_files:
-              text = path.read_text(encoding="utf-8")
-              opens = len(re.findall(r"^```mermaid\s*\$", text, flags=re.M))
-              closes = len(re.findall(r"^```\s*$", text, flags=re.M))
-              if opens == 0 and path.parent.name == "docs":
-                  errors.append(f"{path}: no mermaid blocks found")
-              if closes < opens:
-                  errors.append(f"{path}: unclosed mermaid code block")
+## 2. Container Diagram (Level 1)
 
-              if re.search(r"@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text):
-                  errors.append(f"{path}: potential email address detected")
-              if "/media/" in text or "/home/" in text:
-                  errors.append(f"{path}: local filesystem path detected")
+```mermaid
+flowchart TB
+    subgraph Binary ["RUDP Emulator Binary"]
+        direction LR
+        P1["CLI & Message Parser<br/>(main.cpp, command-handler.cpp)"]
+        P2["Session Manager<br/>(session_manager.h, RUDPSessionManager.cpp)"]
+        P3["Transport Layer<br/>(udp_socket.cpp, tcp_socket.cpp)"]
+        P4["Package Library<br/>(rudp.h, ams_packet.h, crc.h)"]
+        P5["Configuration JSON<br/>(binary_config.h, BinaryConfig.cpp)"]
+        P6["Logging<br/>(logger.h, logger.cpp)"]
+    end
 
-          if errors:
-              for e in errors:
-                  print("ERROR:", e)
-              sys.exit(1)
+    P1 -->|"Parses args & routes commands"| P2
+    P1 -->|"Loads settings"| P5
+    P2 -->|"Creates/destroys sessions"| P3
+    P2 -->|"Builds & parses packets"| P4
+    P2 -->|"Writes DBG/INFO/ERROR"| P6
+    P3 -->|"Serializes datagrams"| P4
+```
 
-          print(f"Successfully validated {len(md_files)} Markdown files.")
-          PYEOF
-EOF
-git add .github/workflows/ci.yml && \
-git commit -m "ci: replace mermaid-cli with python markdown and security validator" && \
-git push
+**Description:** The binary is decomposed into logical containers that each own a set of responsibilities. The Package Library is the core of the RUDP protocol, handling framing, CRC16/32, seven-bit encoding, and error-type packages.
+
+---
+
+## 3. Component Diagram (Level 2) – Package Hierarchy
+
+```mermaid
+classDiagram
+    class RUDPPackage {
+        +uint8_t m_package_type
+        +uint16_t m_crc16
+        +int32_t m_error_code
+        +make_bytes() vector~uint8_t~
+        +make_from_bytes(vector~uint8_t~) void
+        +make_json(json_object*) void
+        +print() void
+    }
+
+    class RUDPErrorPackage {
+        <<abstract>>
+        +uint32_t m_file_id
+    }
+
+    class RUDPErrorNACKPackage {
+        +uint32_t m_file_id
+        +uint32_t m_segment_number
+        +make_from_bytes_extra(buffer) uint16_t
+        +make_bytes_extra() vector~uint8_t~
+        +make_json_extra(json_object*) void
+        +print_extra() void
+    }
+
+    class RUDPErrorCRC32Package {
+        +uint32_t m_calculated_crc32
+        +uint32_t m_received_crc32
+        +uint32_t m_file_id
+        +make_bytes_extra() vector~uint8_t~
+    }
+
+    class RUDPErrorOutOfMemoryPackage {
+        +uint32_t m_file_id
+        +make_bytes_extra() vector~uint8_t~
+    }
+
+    class RUDPErrorWrongFileIdPackage {
+        +uint32_t m_file_id
+        +make_bytes_extra() vector~uint8_t~
+    }
+
+    class RUDPErrorFlagPackage {
+        +uint8_t m_flag
+        +uint32_t m_file_id
+        +Flag STOP_DATA_STOP_RECEIVE_TIMEOUT
+        +make_bytes_extra() vector~uint8_t~
+    }
+
+    RUDPPackage <|-- RUDPErrorPackage
+    RUDPErrorPackage <|-- RUDPErrorNACKPackage
+    RUDPErrorPackage <|-- RUDPErrorCRC32Package
+    RUDPErrorPackage <|-- RUDPErrorOutOfMemoryPackage
+    RUDPErrorPackage <|-- RUDPErrorWrongFileIdPackage
+    RUDPErrorPackage <|-- RUDPErrorFlagPackage
+```
+
+**Description:** The package class hierarchy follows the template method pattern. The base RUDPPackage defines the common serialization flow (make_bytes), CRC generation, and JSON conversion.
