@@ -1,0 +1,24 @@
+name: RUDP Architecture CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  mermaid-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js and Mermaid CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nodejs npm
+          npm install -g @mermaid-js/mermaid-cli
+
+      - name: Validate Mermaid diagrams in docs
+        run: |
+          mermaid-cli check docs/architecture-c4.md docs/protocol-and-sequence.md
