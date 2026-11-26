@@ -1,5 +1,8 @@
 # RUDP Emulator – Architecture Showcase
 
+[![RUDP Architecture CI](https://github.com)](https://github.com)
+
+
 ## Overview
 The **RUDP Emulator** is a C++ reference implementation of a Reliable UDP (RUDP) transport layer. It is used for testing and demonstration of reliable, ordered, and error‑recovering data transfer over an unreliable UDP substrate. The emulator simulates the full protocol stack (packet construction, error detection, retransmission, NACK handling, and session management) and can be driven via a command‑line interface or integrated as a library into other projects.
 
